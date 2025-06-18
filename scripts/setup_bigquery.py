@@ -1,18 +1,27 @@
-import sys
 import os
+import sys
 
-# Ensure the parent directory is in the module path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Ensure the root path is included
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
+sys.path.append(parent_dir)
+
+from dotenv import load_dotenv
+load_dotenv()
 
 from google.cloud import bigquery
-from google.api_core.exceptions import NotFound, Conflict
+from google.api_core.exceptions import NotFound
 from config.settings import PROJECT_ID, BQ_DATASET, BQ_TABLE
 
-client = bigquery.Client()
+# Validate .env variables
+if not all([PROJECT_ID, BQ_DATASET, BQ_TABLE]):
+    raise EnvironmentError(f"❌ Missing environment variables. Loaded: "
+                           f"PROJECT_ID={PROJECT_ID}, BQ_DATASET={BQ_DATASET}, BQ_TABLE={BQ_TABLE}")
 
+client = bigquery.Client(project=PROJECT_ID)
 table_id = f"{PROJECT_ID}.{BQ_DATASET}.{BQ_TABLE}"
 
-# Define the schema
+# Define schema
 schema = [
     bigquery.SchemaField("flight_date", "DATE"),
     bigquery.SchemaField("airline_name", "STRING"),
@@ -25,26 +34,26 @@ schema = [
 ]
 
 try:
-    # Check if table exists
+    # Try getting the table to check if it already exists
     table = client.get_table(table_id)
     print(f"ℹ️ Table already exists: {table_id}")
 
-    # Compare existing schema with the new schema
+    # Check for schema mismatch and update if needed
     existing_fields = {field.name for field in table.schema}
     new_fields = [field for field in schema if field.name not in existing_fields]
 
     if new_fields:
         updated_schema = table.schema + new_fields
         table.schema = updated_schema
-        table = client.update_table(table, ["schema"])
-        print("✅ Schema updated with new fields.")
+        client.update_table(table, ["schema"])
+        print("✅ Table schema updated.")
     else:
         print("✅ Table schema already matches.")
 
 except NotFound:
-    # If table doesn't exist, create it
-    table_ref = bigquery.Table(table_id, schema=schema)
-    client.create_table(table_ref)
+    # Table doesn't exist: create it
+    table = bigquery.Table(table_id, schema=schema)
+    client.create_table(table)
     print(f"✅ Table created successfully: {table_id}")
 
 except Exception as e:

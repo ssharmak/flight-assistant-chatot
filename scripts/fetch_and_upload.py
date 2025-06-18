@@ -1,62 +1,76 @@
-import os
+# scripts/fetch_and_upload.py
+
 import requests
-from datetime import datetime
 from google.cloud import bigquery
+import os
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
 
 API_KEY = os.getenv("AVIATIONSTACK_API_KEY")
 PROJECT_ID = os.getenv("PROJECT_ID")
-DATASET = os.getenv("BQ_DATASET")
-TABLE = os.getenv("BQ_TABLE")
+BQ_DATASET = os.getenv("BQ_DATASET")
+BQ_TABLE = os.getenv("BQ_TABLE")
+TABLE_ID = f"{PROJECT_ID}.{BQ_DATASET}.{BQ_TABLE}"
 
-def fetch_today_flights():
-    today = datetime.today().strftime('%Y-%m-%d')
-    url = f"http://api.aviationstack.com/v1/flights?access_key={API_KEY}&limit=100&flight_date={today}"
-    print("📡 Fetching real-time flight data...")
-    resp = requests.get(url)
-    resp.raise_for_status()
-    data = resp.json().get("data", [])
-    return data
+BASE_URL = "http://api.aviationstack.com/v1/flights"
 
-def upload_to_bigquery(data):
-    client = bigquery.Client(project=PROJECT_ID)
-    table_id = f"{PROJECT_ID}.{DATASET}.{TABLE}"
+def fetch_flights():
+    params = {
+        "access_key": API_KEY,
+        "limit": 100
+    }
+    response = requests.get(BASE_URL, params=params)
+    response.raise_for_status()
+    return response.json().get("data", [])
 
-    rows_to_insert = []
-    for flight in data:
-        try:
-            rows_to_insert.append({
-                "flight_date": flight.get("flight_date"),
-                "flight_status": flight.get("flight_status"),
-                "departure_airport": flight.get("departure", {}).get("airport"),
-                "departure_iata": flight.get("departure", {}).get("iata"),
-                "arrival_airport": flight.get("arrival", {}).get("airport"),
-                "arrival_iata": flight.get("arrival", {}).get("iata"),
-                "airline_name": flight.get("airline", {}).get("name"),
-                "flight_number": flight.get("flight", {}).get("number"),
-                "departure_scheduled": flight.get("departure", {}).get("scheduled"),
-                "arrival_scheduled": flight.get("arrival", {}).get("scheduled")
-            })
-        except Exception as e:
-            print(f"⚠️ Skipping invalid record: {e}")
-
-    errors = client.insert_rows_json(table_id, rows_to_insert)
-    if errors:
-        print(f"❌ Upload failed with errors: {errors}")
-    else:
-        print(f"✅ Uploaded {len(rows_to_insert)} flights to BigQuery.")
-
-def main():
+def parse_ts(ts):
     try:
-        data = fetch_today_flights()
-        if not data:
-            print("⚠️ No flights found.")
-        else:
-            upload_to_bigquery(data)
-    except Exception as e:
-        print(f"❌ Error: {e}")
+        dt = datetime.fromisoformat(ts.replace('Z', '+00:00')) if ts else None
+        return dt.isoformat() if dt else None
+    except:
+        return None
+
+def format_row(item):
+    return {
+        "flight_date": item.get("flight_date"),
+        "airline_name": item.get("airline", {}).get("name"),
+        "flight_number": item.get("flight", {}).get("iata"),
+        "departure_airport": item.get("departure", {}).get("airport"),
+        "arrival_airport": item.get("arrival", {}).get("airport"),
+        "status": item.get("flight_status"),
+        "scheduled_departure": parse_ts(item.get("departure", {}).get("scheduled")),
+        "scheduled_arrival": parse_ts(item.get("arrival", {}).get("scheduled")),
+    }
+
+def upload_to_bigquery(flights):
+    client = bigquery.Client()
+    rows = [format_row(item) for item in flights if item]
+    if not rows:
+        print("⚠️ No valid rows to upload.")
+        return
+
+    # Delete duplicates (flight_date + flight_number) before inserting
+    unique_keys = {(r['flight_date'], r['flight_number']) for r in rows if r['flight_date'] and r['flight_number']}
+    for flight_date, flight_number in unique_keys:
+        delete_sql = f"""
+        DELETE FROM `{TABLE_ID}`
+        WHERE flight_date = '{flight_date}' AND flight_number = '{flight_number}'
+        """
+        client.query(delete_sql).result()
+
+    errors = client.insert_rows_json(TABLE_ID, rows)
+    if not errors:
+        print(f"✅ Inserted {len(rows)} rows.")
+    else:
+        print("❌ Insert errors:", errors)
 
 if __name__ == "__main__":
-    main()
+    try:
+        print("📡 Fetching flight data...")
+        flights = fetch_flights()
+        print(f"📦 Retrieved {len(flights)} flights. Uploading to BigQuery...")
+        upload_to_bigquery(flights)
+    except Exception as e:
+        print("❌ Failed:", e)
