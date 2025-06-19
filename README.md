@@ -31,17 +31,16 @@ This project provides a **real-time flight dashboard** and a **chatbot interface
 
 ---
 
-## 🔐 `.env` Configuration
+🔐 `.env` Configuration
 
-## Create a `.env` file in your root directory:
+Create a `.env` file in your root directory:
 PROJECT_ID=your-gcp-project-id
 DATASET_ID=avaiation_data
 TABLE_ID=weekly_flight_logs
 AVIATIONSTACK_API_KEY=your_aviationstack_api_key
---
-Also set:
----
 
+Set:
+--
 GOOGLE_APPLICATION_CREDENTIALS=path/to/your/service-account.json
 
 ⚙️ Installation
@@ -82,7 +81,7 @@ python scripts/env_check.py
 python scripts/fetch_and_upload.py
 ```
 
-✅ This will insert the latest 200 flights into BigQuery.
+✅ This will insert the latest flights into BigQuery.
 
 📊 Run the Streamlit Dashboard
 ```bash
