@@ -33,11 +33,11 @@ This project provides a **real-time flight dashboard** and a **chatbot interface
 
 🔐 `.env` Configuration
 
-Create a `.env` file in your root directory:
-PROJECT_ID=your-gcp-project-id
-DATASET_ID=avaiation_data
-TABLE_ID=weekly_flight_logs
-AVIATIONSTACK_API_KEY=your_aviationstack_api_key
+- Create a `.env` file in your root directory:
+- PROJECT_ID=your-gcp-project-id
+- DATASET_ID=avaiation_data
+- TABLE_ID=weekly_flight_logs
+- AVIATIONSTACK_API_KEY=your_aviationstack_api_key
 
 Set:
 --
