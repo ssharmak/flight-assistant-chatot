@@ -24,7 +24,8 @@ def set_bg():
     st.markdown("""
         <style>
         .stApp {
-            background-image: url("https://images.unsplash.com/photo-1504196606672-aef5c9cefc92?auto=format&fit=crop&w=1950&q=80");
+             background-image: url("https://wallpapers.com/images/hd/planes-4k-ultra-hd-ypebdpcfccod2b8t.jpg");
+            background-size: cover;
             background-size: cover;
             background-attachment: fixed;
             color: white;
@@ -40,11 +41,9 @@ def set_bg():
     """, unsafe_allow_html=True)
 
 set_bg()
-
 st.markdown('<div class="title">✈️ Flight Dashboard (Live Update)</div>', unsafe_allow_html=True)
 
-# ----- Fetch & Upload to BigQuery -----
-
+# ----- Utility Functions -----
 def parse_ts(ts):
     try:
         dt = datetime.fromisoformat(ts.replace("Z", "+00:00")) if ts else None
@@ -96,23 +95,26 @@ def refresh_data_from_aviationstack():
     except Exception as e:
         return 0, str(e)
 
-# ----- Button to Refresh -----
+# ✅ Cached data loader
+@st.cache_data(show_spinner=False)
+def load_data_from_bigquery():
+    client = bigquery.Client()
+    query = f"SELECT * FROM `{TABLE_ID}` ORDER BY scheduled_departure DESC"
+    return client.query(query).to_dataframe()
+
+# ----- Refresh Button -----
 if st.button("🔁 Refresh Flight Data from Aviationstack"):
     with st.spinner("Fetching live data from API..."):
         inserted, errors = refresh_data_from_aviationstack()
+        st.cache_data.clear()  # clear cached data after refresh
         if errors == []:
             st.success(f"✅ {inserted} rows inserted into BigQuery.")
         else:
             st.error(f"❌ Error uploading data: {errors}")
 
-# ----- Load Data for Dashboard -----
+# ----- Load and Display Data -----
 try:
-    client = bigquery.Client()
-    df = client.query(f"""
-        SELECT * FROM `{TABLE_ID}`
-        ORDER BY scheduled_departure DESC
-        LIMIT 500
-    """).to_dataframe()
+    df = load_data_from_bigquery()
 
     if df.empty:
         st.warning("No data available.")
