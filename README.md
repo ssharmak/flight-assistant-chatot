@@ -9,27 +9,6 @@ This project provides a **real-time flight dashboard** and a **chatbot interface
 
 ---
 
-## 📁 Project Structure
-
-# flight-assistant-chatbot/
-├── agents/
-│ ├── flight_analytics_agent.py # Analyzes trends like BLR to DEL
-│ ├── flight_status_agent.py # Gets flight status by flight number
-│ └── inquiry_router.py # Routes natural language to agents
-├── config/
-│ └── settings.py # Loads environment variables
-├── scripts/
-│ ├── fetch_and_upload.py # Fetches and uploads live flights
-│ ├── setup_bigquery.py # Creates/updates BigQuery schema
-│ └── env_check.py # Debugs .env variables
-├── dashboards/
-│ └── flight_dashboard.py # Streamlit dashboard UI
-├── chatbot.py # CLI-based chatbot for queries
-├── requirements.txt # Python dependencies
-├── .env # Secret keys & project config
-└── README.md # This file
----
-
 ## ✅ Features
 
 - 🔄 **Live flight data fetch** (100–200 flights per request)
@@ -65,7 +44,7 @@ Also set:
 
 GOOGLE_APPLICATION_CREDENTIALS=path/to/your/service-account.json
 
-# ⚙️ Installation
+⚙️ Installation
 1️⃣ Clone the Repository
 --- 
 ```bash
@@ -73,7 +52,7 @@ git clone https://github.com/ssharmak/flight-assistant-chatbot.git
 cd flight-assistant
 ```
 
-# 2️⃣ Create Virtual Environment (optional) 
+2️⃣ Create Virtual Environment (optional) 
 ```bash
 python -m venv venv
 venv\Scripts\activate # On Windows
@@ -81,46 +60,46 @@ venv\Scripts\activate # On Windows
 source venv/bin/activate  # On macOS/Linux
 ```
 
-# 3️⃣ Install Dependencies
+3️⃣ Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-# 🏗️ Setup BigQuery Table
-# Create the table and update schema if needed:
+🏗️ Setup BigQuery Table
+Create the table and update schema if needed:
 ```bash
 python scripts/setup_bigquery.py
 ```
-# Test environment variables:
+Test environment variables:
 ```bash
 python scripts/env_check.py
 ```
 
-# 📥 Fetch and Upload Flight Data
+📥 Fetch and Upload Flight Data
 
 ```bash
 python scripts/fetch_and_upload.py
 ```
 
-# ✅ This will insert the latest 200 flights into BigQuery.
+✅ This will insert the latest 200 flights into BigQuery.
 
-# 📊 Run the Streamlit Dashboard
+📊 Run the Streamlit Dashboard
 ```bash
 streamlit run dashboards/flight_dashboard.py
 ```
-# Click 🔁 to refresh flight data from the API
+Click 🔁 to refresh flight data from the API
 
-# Shows all flights in a live table
+Shows all flights in a live table
 
-# Displays pie chart of status distribution
+Displays pie chart of status distribution
 
 💬 Run the Chatbot
 ```bash
 python chatbot.py
 ```
-## Sample Queries:
-##AI302 (Flight number) 
+Sample Queries:
+AI302 (Flight number) 
 
 ## 🔍 Technologies Used
 | Component  | Technology              |
