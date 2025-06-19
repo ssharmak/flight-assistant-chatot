@@ -3,83 +3,137 @@ import streamlit as st
 from google.cloud import bigquery
 from dotenv import load_dotenv
 import pandas as pd
+import requests
+from datetime import datetime
+import time
 
-# Load env
+# Load environment variables
 load_dotenv()
+
 PROJECT_ID = os.getenv("PROJECT_ID")
-DATASET_ID = os.getenv("DATASET_ID")
-TABLE_ID = os.getenv("TABLE_ID")
-FULL_TABLE = f"{PROJECT_ID}.{DATASET_ID}.{TABLE_ID}"
+BQ_DATASET = os.getenv("DATASET_ID")
+BQ_TABLE = os.getenv("TABLE_ID")
+TABLE_ID = f"{PROJECT_ID}.{BQ_DATASET}.{BQ_TABLE}"
+API_KEY = os.getenv("AVIATIONSTACK_API_KEY")
+BASE_URL = "http://api.aviationstack.com/v1/flights"
 
-# BigQuery client
-client = bigquery.Client()
+# ----- Styling -----
+st.set_page_config(layout="wide", page_title="✈️ Flight Tracker Dashboard")
 
-# UI Layout
-st.set_page_config("Flight Insights", layout="wide")
-st.title("✈️ Flight Dashboard & Chatbot")
-st.markdown("### Live Flight Table (Latest 50)")
+def set_bg():
+    st.markdown("""
+        <style>
+        .stApp {
+            background-image: url("https://images.unsplash.com/photo-1504196606672-aef5c9cefc92?auto=format&fit=crop&w=1950&q=80");
+            background-size: cover;
+            background-attachment: fixed;
+            color: white;
+        }
+        .title {
+            font-size: 48px;
+            font-weight: 800;
+            color: #ffffff;
+            text-shadow: 2px 2px 4px #000;
+            text-align: center;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
-@st.cache_data(ttl=300)
-def load_recent():
-    df = client.query(f"""
-        SELECT flight_date, airline_name, flight_number,
-               departure_airport, arrival_airport, status,
-               scheduled_departure
-        FROM `{FULL_TABLE}`
-        ORDER BY scheduled_departure DESC
-        LIMIT 50
-    """).to_dataframe()
-    return df
+set_bg()
 
-st.dataframe(load_recent(), use_container_width=True)
+st.markdown('<div class="title">✈️ Flight Dashboard (Live Update)</div>', unsafe_allow_html=True)
 
-st.markdown("---")
-st.header("💬 Ask Flight Info")
+# ----- Fetch & Upload to BigQuery -----
 
-user_q = st.text_input("Your Query (e.g., flight AA123 status, arrivals from JFK)", "")
+def parse_ts(ts):
+    try:
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00")) if ts else None
+        return dt.isoformat() if dt else None
+    except:
+        return None
 
-if user_q:
-    st.markdown("**Response:**")
-    # Basic intent detection
-    import re
-    flight_match = re.search(r"\b([A-Z]{2}\d{3,4})\b", user_q.upper())
-    if flight_match:
-        # Flight status query flow
-        num = flight_match.group(1)
-        sql = f"""
-          SELECT flight_date, departure_airport, arrival_airport,
-                 status, scheduled_departure
-          FROM `{FULL_TABLE}`
-          WHERE flight_number = '{num}'
-          ORDER BY scheduled_departure DESC
-          LIMIT 1
-        """
-    else:
-        # Route arrivals/departures query
-        route_match = re.search(r"\bfrom\s*([A-Z]{3})", user_q.upper())
-        loc = route_match.group(1) if route_match else None
-        if loc:
-            sql = f"""
-              SELECT flight_date, airline_name, flight_number,
-                     departure_airport, arrival_airport, status
-              FROM `{FULL_TABLE}`
-              WHERE departure_airport LIKE '%{loc}%' 
-                OR arrival_airport LIKE '%{loc}%'
-              ORDER BY flight_date DESC
-              LIMIT 10
+def format_row(item):
+    return {
+        "flight_date": item.get("flight_date"),
+        "airline_name": item.get("airline", {}).get("name"),
+        "flight_number": item.get("flight", {}).get("iata"),
+        "departure_airport": item.get("departure", {}).get("airport"),
+        "arrival_airport": item.get("arrival", {}).get("airport"),
+        "status": item.get("flight_status"),
+        "scheduled_departure": parse_ts(item.get("departure", {}).get("scheduled")),
+        "scheduled_arrival": parse_ts(item.get("arrival", {}).get("scheduled")),
+    }
+
+def refresh_data_from_aviationstack():
+    try:
+        all_flights = []
+        for offset in [0, 100]:
+            params = {"access_key": API_KEY, "limit": 100, "offset": offset}
+            r = requests.get(BASE_URL, params=params)
+            r.raise_for_status()
+            all_flights += r.json().get("data", [])
+            time.sleep(1)
+
+        rows = [format_row(f) for f in all_flights if f and f.get("flight", {}).get("iata")]
+        client = bigquery.Client()
+        unique_keys = {(r['flight_date'], r['flight_number']) for r in rows if r['flight_date'] and r['flight_number']}
+
+        for flight_date, flight_number in unique_keys:
+            delete_sql = f"""
+                DELETE FROM `{TABLE_ID}`
+                WHERE flight_date = @flight_date AND flight_number = @flight_number
             """
-        else:
-            sql = None
+            job_config = bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("flight_date", "DATE", flight_date),
+                    bigquery.ScalarQueryParameter("flight_number", "STRING", flight_number),
+                ]
+            )
+            client.query(delete_sql, job_config=job_config).result()
 
-    if sql:
-        try:
-            result = client.query(sql).to_dataframe()
-            if not result.empty:
-                st.table(result)
-            else:
-                st.write("❌ No matching flights found.")
-        except Exception as e:
-            st.write("❌ Error querying BigQuery:")
-            st.exception(e)
+        errors = client.insert_rows_json(TABLE_ID, rows)
+        return len(rows), errors
+    except Exception as e:
+        return 0, str(e)
+
+# ----- Button to Refresh -----
+if st.button("🔁 Refresh Flight Data from Aviationstack"):
+    with st.spinner("Fetching live data from API..."):
+        inserted, errors = refresh_data_from_aviationstack()
+        if errors == []:
+            st.success(f"✅ {inserted} rows inserted into BigQuery.")
+        else:
+            st.error(f"❌ Error uploading data: {errors}")
+
+# ----- Load Data for Dashboard -----
+try:
+    client = bigquery.Client()
+    df = client.query(f"""
+        SELECT * FROM `{TABLE_ID}`
+        ORDER BY scheduled_departure DESC
+        LIMIT 500
+    """).to_dataframe()
+
+    if df.empty:
+        st.warning("No data available.")
     else:
-        st.write("🤖 I didn't understand. Try 'flight XX1234' or 'from JFK'.")
+        st.markdown("### 📋 Flight Table")
+        st.dataframe(df, use_container_width=True)
+
+        st.markdown("### 🧭 Pie Chart: Status")
+        counts = df["status"].value_counts()
+        st.plotly_chart({
+            "data": [{
+                "type": "pie",
+                "labels": counts.index.tolist(),
+                "values": counts.values.tolist()
+            }],
+            "layout": {
+                "title": "Flight Status Overview",
+                "paper_bgcolor": "rgba(0,0,0,0)",
+                "font": {"color": "white"}
+            }
+        }, use_container_width=True)
+
+except Exception as e:
+    st.error(f"❌ Failed to load dashboard: {e}")
