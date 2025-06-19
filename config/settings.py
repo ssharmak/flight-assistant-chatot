@@ -4,8 +4,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 PROJECT_ID = os.getenv("PROJECT_ID")
-BQ_DATASET = os.getenv("DATASET_ID")  # Use DATASET_ID not BQ_DATASET
+BQ_DATASET = os.getenv("DATASET_ID")
 BQ_TABLE = os.getenv("TABLE_ID")
+API_KEY = os.getenv("AVIATIONSTACK_API_KEY")  # ✅ Add this line
 
-if not all([PROJECT_ID, BQ_DATASET, BQ_TABLE]):
-    raise ValueError("❌ Environment variables PROJECT_ID, DATASET_ID, or TABLE_ID are missing.")
+# Validate
+if not all([PROJECT_ID, BQ_DATASET, BQ_TABLE, API_KEY]):
+    raise ValueError("❌ Missing one or more required environment variables.")
