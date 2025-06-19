@@ -1,6 +1,7 @@
-requests
+streamlit
 python-dotenv
+requests
 google-cloud-bigquery
-pytz 
+google-api-core
 pandas
-streamlita
+plotly
