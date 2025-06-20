@@ -110,3 +110,5 @@ AI302 (Flight number)
 | Auth       | GCP Service Account     |
 | Deployment | Local / Streamlit Cloud |
 ---
+Note: The google service account json file is not attached along with the project. You can goto google cloud and get the service account json file. 
+For any queries reach out to shaileshsharmakodwakere@gmail.com
