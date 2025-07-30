@@ -3,25 +3,24 @@ from agents.flight_status_agent import FlightStatusAgent
 from agents.flight_analytics_agent import FlightAnalyticsAgent
 
 class InquiryRouter:
-    # Main router class to interpret user's natural language query and
-    # delegate to the appropriate agent (status or analytics)
-
     def route(self, query: str) -> str:
-        # Normalize query by trimming whitespace and converting to uppercase
         query_upper = query.strip().upper()
 
-        # --- Flight Status Handler ---
-        # Check if the query contains a flight number (e.g., AI202 or 6E1234)
-        # Flight numbers typically start with 2 letters followed by 2–4 digits
-        match = re.search(r'\b([A-Z]{2}\d{2,4})\b', query_upper)
-        if match:
-            return FlightStatusAgent().run(match.group(1))  # Call status agent
+        # --- Flight Number Pattern (Flexible) ---
+        # Matches 2–3 alphanumeric + 1–4 digits or any mix with optional trailing letters
+        flight_pattern = re.search(r'\b([A-Z0-9]{2,4}\d{1,4}[A-Z]?)\b', query_upper)
 
-        # --- Flight Route Analytics Handler ---
-        # Check if the query mentions a route like "BLR to DEL"
-        match = re.search(r'\b([A-Z]{3})\s*to\s*([A-Z]{3})\b', query_upper)
-        if match:
-            return FlightAnalyticsAgent().run(query)  # Call analytics agent
+        if flight_pattern:
+            flight_number = flight_pattern.group(1)
+            response = FlightStatusAgent().run(flight_number)
 
-        # Fallback: unrecognized query format
-        return "❓ Sorry, I couldn't understand your query. Try something like 'AI202' or 'BLR to DEL'"
+            if "No information found" not in response:
+                return response
+
+        # --- Flight Route (e.g., BLR to DEL) ---
+        route_pattern = re.search(r'\b([A-Z]{3})\s*to\s*([A-Z]{3})\b', query_upper)
+        if route_pattern:
+            return FlightAnalyticsAgent().run(query_upper)
+
+        # --- Fallback: Nothing recognized ---
+        return "❓ Sorry, I couldn't identify a valid flight number or route in your query."
