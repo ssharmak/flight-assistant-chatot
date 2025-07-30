@@ -81,8 +81,8 @@ class FlightStatusAgent:
         response = (
             f"✈️ **Flight Details:**\n"
             f"• Flight Number: {record.get('flight_number', 'N/A')}\n"
-            f"• Departure: {record.get('departure_airport', 'N/A')} at {record.get('departure_time', 'N/A')}\n"
-            f"• Arrival: {record.get('arrival_airport', 'N/A')} at {record.get('arrival_time', 'N/A')}\n"
+            f"• Departure: {record.get('departure_airport', 'N/A')} "
+            f"• Arrival: {record.get('arrival_airport', 'N/A')} "
             f"• Status: {record.get('status', 'N/A')}\n"
         )
         return response
