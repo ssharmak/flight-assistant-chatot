@@ -80,9 +80,9 @@ class FlightStatusAgent:
         # Create a nicely formatted response using available fields
         response = (
             f"✈️ **Flight Details:**\n"
-            f"• Flight Number: {record.get('flight_number', 'N/A')}\n"
-            f"• Departure: {record.get('departure_airport', 'N/A')} "
-            f"• Arrival: {record.get('arrival_airport', 'N/A')} "
-            f"• Status: {record.get('status', 'N/A')}\n"
+            f"• Flight Number: {record.get('flight_number', 'N/A')} \n"
+            f"• Departure: {record.get('departure_airport', 'N/A')} \n"
+            f"• Arrival: {record.get('arrival_airport', 'N/A')} \n"
+            f"• Status: {record.get('status', 'N/A')} \n"
         )
         return response
