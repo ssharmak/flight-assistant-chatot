@@ -7,10 +7,10 @@ import requests
 from datetime import datetime
 import time
 
-# 🔧 Load Environment Variables
-
+# 🔧 Load environment variables from .env file
 load_dotenv()
 
+# 📌 Project and table configurations
 PROJECT_ID = os.getenv("PROJECT_ID")
 BQ_DATASET = os.getenv("DATASET_ID")
 BQ_TABLE = os.getenv("TABLE_ID")
@@ -18,12 +18,11 @@ TABLE_ID = f"{PROJECT_ID}.{BQ_DATASET}.{BQ_TABLE}"
 API_KEY = os.getenv("AVIATIONSTACK_API_KEY")
 BASE_URL = "http://api.aviationstack.com/v1/flights"
 
-# 🎨 Dashboard Styling
-
+# 🎨 Streamlit UI Configuration
 st.set_page_config(layout="wide", page_title="✈️ Flight Tracker Dashboard")
 
 def set_bg():
-    """Set a background image of an airplane for the Streamlit dashboard."""
+    """Set a background image to enhance UI aesthetics."""
     st.markdown("""
         <style>
         .stApp {
@@ -42,13 +41,16 @@ def set_bg():
         </style>
     """, unsafe_allow_html=True)
 
+# 🚀 Set dashboard background
 set_bg()
+
+# 📌 Page Title
 st.markdown('<div class="title">✈️ Flight Dashboard (Live Update)</div>', unsafe_allow_html=True)
 
 # 🧩 Utility Functions
 
 def parse_ts(ts):
-    """Convert ISO timestamp string to standard format."""
+    """Convert ISO timestamp to a human-readable ISO string."""
     try:
         dt = datetime.fromisoformat(ts.replace("Z", "+00:00")) if ts else None
         return dt.isoformat() if dt else None
@@ -56,7 +58,7 @@ def parse_ts(ts):
         return None
 
 def format_row(item):
-    """Format each API response row to match BigQuery schema."""
+    """Format a single API response record to match BigQuery schema."""
     return {
         "flight_date": item.get("flight_date"),
         "airline_name": item.get("airline", {}).get("name"),
@@ -70,26 +72,27 @@ def format_row(item):
 
 def refresh_data_from_aviationstack():
     """
-    Fetch live flight data from Aviationstack API and upload to BigQuery.
-    It deletes old entries for same flight (by flight_date + flight_number).
+    Fetch latest flight data from the Aviationstack API,
+    format it, and push to BigQuery after removing duplicates.
     """
     try:
         all_flights = []
-        for offset in [0, 100]:  # Fetch 200 flights in two batches
+        # 🔁 Fetch 200 records in two batches (due to API limits)
+        for offset in [0, 100]:
             params = {"access_key": API_KEY, "limit": 100, "offset": offset}
             r = requests.get(BASE_URL, params=params)
             r.raise_for_status()
             all_flights += r.json().get("data", [])
-            time.sleep(1)  # prevent rate limit
+            time.sleep(1)  # pause to respect rate limit
 
-        # Format API data to BigQuery rows
+        # 🧹 Clean & format data
         rows = [format_row(f) for f in all_flights if f and f.get("flight", {}).get("iata")]
 
-        # BigQuery client setup
+        # 🛢️ BigQuery client and duplicate cleanup
         client = bigquery.Client()
         unique_keys = {(r['flight_date'], r['flight_number']) for r in rows if r['flight_date'] and r['flight_number']}
 
-        # Clean old duplicates
+        # ❌ Delete duplicates before insertion
         for flight_date, flight_number in unique_keys:
             delete_sql = f"""
                 DELETE FROM `{TABLE_ID}`
@@ -103,33 +106,39 @@ def refresh_data_from_aviationstack():
             )
             client.query(delete_sql, job_config=job_config).result()
 
-        # Upload new rows
+        # ⬆️ Insert new rows to BigQuery
         errors = client.insert_rows_json(TABLE_ID, rows)
         return len(rows), errors
     except Exception as e:
         return 0, str(e)
 
-# 🧠 Cache BigQuery Data
-
+# 🔄 Cache BigQuery Data
 @st.cache_data(show_spinner=False)
 def load_data_from_bigquery():
-    """Fetch all flight data from BigQuery and return as DataFrame."""
+    """Load the latest 300 flight records from BigQuery."""
     client = bigquery.Client()
-    query = f"SELECT * FROM `{TABLE_ID}` ORDER BY scheduled_departure DESC"
+    query = f"""
+        SELECT * FROM `{TABLE_ID}`
+        ORDER BY scheduled_departure DESC
+        LIMIT 300
+    """
+    
+    # Query to fetch all the data from the Table in Bigquery
+    # query = f"SELECT * FROM `{TABLE_ID}` ORDER BY scheduled_departure DESC"
+
     return client.query(query).to_dataframe()
 
-# 🔁 Button: Refresh API Data
-
+# 🔘 Button to fetch latest data from Aviationstack API
 if st.button("🔁 Refresh Flight Data from Aviationstack"):
     with st.spinner("Fetching live data from API..."):
         inserted, errors = refresh_data_from_aviationstack()
-        st.cache_data.clear()  # clear cache so updated data will load
+        st.cache_data.clear()  # clear cache to refresh UI
         if errors == []:
             st.success(f"✅ {inserted} rows inserted into BigQuery.")
         else:
             st.error(f"❌ Error uploading data: {errors}")
 
-# 📊 Load and Display Data
+# 📊 Load and Display Dashboard Data
 
 try:
     df = load_data_from_bigquery()
@@ -137,11 +146,11 @@ try:
     if df.empty:
         st.warning("No data available.")
     else:
-        # Table Display
+        # 📋 Show Raw Data Table
         st.markdown("### 📋 Flight Table")
         st.dataframe(df, use_container_width=True)
 
-        # Pie Chart Display
+        # 🥧 Display Status Breakdown
         st.markdown("### 🧭 Pie Chart: Status")
         counts = df["status"].value_counts()
         st.plotly_chart({
